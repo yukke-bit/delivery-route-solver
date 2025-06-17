@@ -49,7 +49,7 @@ class VRPVisualizer:
         # デポを特別な記号で表示
         plt.scatter(self.depot.x, self.depot.y, 
                    c='red', s=200, marker='s', 
-                   label=f'Depot (ID: {self.depot.id})', 
+                   label=f'Depot ID: {self.depot.id}', 
                    edgecolor='black', linewidth=2, zorder=5)
         
         # デポにテキストラベルを追加
@@ -86,7 +86,7 @@ class VRPVisualizer:
             
             plt.scatter(route_x, route_y, 
                        c=color, s=100, alpha=0.8, 
-                       label=f'Vehicle {i+1} ({len(route)} customers)',
+                       label=f'Vehicle {i+1} - {len(route)} customers',
                        edgecolor='black', linewidth=1, zorder=3)
             
             # ルートの線を描画
@@ -175,13 +175,13 @@ class VRPVisualizer:
         # 第1の解
         plt.sca(ax1)
         self.plot_solution(routes1, 
-                          title=f"{label1} (Cost: {cost1:.2f})", 
+                          title=f"{label1} - Cost: {cost1:.2f}", 
                           show_plot=False)
         
         # 第2の解
         plt.sca(ax2) 
         self.plot_solution(routes2, 
-                          title=f"{label2} (Cost: {cost2:.2f})", 
+                          title=f"{label2} - Cost: {cost2:.2f}", 
                           show_plot=False)
         
         # 全体のタイトル
@@ -208,7 +208,7 @@ class VRPVisualizer:
         # デポを表示
         plt.scatter(self.depot.x, self.depot.y, 
                    c='red', s=300, marker='s', 
-                   label=f'Depot (ID: {self.depot.id})', 
+                   label=f'Depot ID: {self.depot.id}', 
                    edgecolor='black', linewidth=2)
         
         # 顧客を表示（需要量に応じてサイズを変更）
@@ -228,7 +228,7 @@ class VRPVisualizer:
                         fontsize=8, ha='center', va='center')
         
         plt.scatter([], [], c='lightblue', s=100, alpha=0.7, 
-                   label='Customer (size=demand)', edgecolor='navy')
+                   label='Customer - size=demand', edgecolor='navy')
         
         plt.xlabel('X Coordinate', fontsize=12)
         plt.ylabel('Y Coordinate', fontsize=12)
