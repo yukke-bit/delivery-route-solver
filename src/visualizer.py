@@ -9,8 +9,9 @@ from typing import List, Tuple
 import numpy as np
 from .vrp_parser import VRPInstance, Customer
 
-# 日本語フォント問題の回避：英語ラベルを使用
+# フォント設定を明示的に指定してUnicode問題を回避
 plt.rcParams['font.family'] = 'DejaVu Sans'
+plt.rcParams['axes.unicode_minus'] = False
 
 class VRPVisualizer:
     """VRP解の可視化を行うクラス"""
@@ -52,7 +53,7 @@ class VRPVisualizer:
                    edgecolor='black', linewidth=2, zorder=5)
         
         # デポにテキストラベルを追加
-        plt.annotate(f'Depot\n{self.depot.id}', 
+        plt.annotate(f'Depot {self.depot.id}', 
                     (self.depot.x, self.depot.y),
                     xytext=(5, 5), textcoords='offset points',
                     fontsize=10, fontweight='bold',
@@ -220,8 +221,8 @@ class VRPVisualizer:
                        c='lightblue', s=size, alpha=0.7,
                        edgecolor='navy', linewidth=1)
             
-            # 顧客IDと需要量を表示
-            plt.annotate(f'{customer.id}\n(D:{customer.demand})', 
+            # 顧客IDと需要量を表示  
+            plt.annotate(f'{customer.id} D{customer.demand}', 
                         (customer.x, customer.y),
                         xytext=(0, 0), textcoords='offset points',
                         fontsize=8, ha='center', va='center')
@@ -236,7 +237,7 @@ class VRPVisualizer:
         plt.axis('equal')
         
         # 問題情報を表示
-        info_text = f"Customers: {len(self.customers)}\nVehicle Capacity: {self.instance.capacity}"
+        info_text = f"Customers: {len(self.customers)} | Capacity: {self.instance.capacity}"
         plt.text(0.02, 0.98, info_text, transform=plt.gca().transAxes, 
                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
         
