@@ -9,6 +9,7 @@ import sys
 import time
 from src.vrp_parser import parse_vrp_file
 from src.simple_vrp_solver import SimpleVRPSolver
+from src.visualizer import VRPVisualizer
 # from src.column_generation import ColumnGeneration  # 後で使用
 
 def main():
@@ -73,6 +74,39 @@ def main():
         if os.path.exists(f"data/instances/{os.path.basename(optimal_file)}"):
             print(f"\n最適解ファイル: {optimal_file}")
             # TODO: 最適解の読み込みと詳細比較は後で実装
+        
+        # 解の可視化
+        print("\n" + "=" * 50)
+        print("解の可視化")
+        
+        try:
+            # 可視化クラスを初期化
+            visualizer = VRPVisualizer(instance)
+            
+            # 問題インスタンス（顧客分布）を表示
+            print("問題インスタンス（顧客分布）を表示...")
+            visualizer.plot_problem_instance(
+                save_path="results/problem_instance.png",
+                show_plot=False  # ターミナル環境では表示しない
+            )
+            
+            # VRP解を可視化
+            print("VRP解を可視化...")
+            solution_title = f"VRP解: {instance.name} (貪欲法)"
+            visualizer.plot_solution(
+                routes=routes,
+                title=solution_title,
+                save_path="results/solution_visualization.png", 
+                show_plot=False  # ターミナル環境では表示しない
+            )
+            
+            print("可視化画像を results/ ディレクトリに保存しました")
+            print("- problem_instance.png: 問題インスタンス（顧客分布）")
+            print("- solution_visualization.png: VRP解の可視化")
+            
+        except Exception as viz_error:
+            print(f"可視化エラー: {viz_error}")
+            print("matplotlibが正しくインストールされていない可能性があります")
         
     except Exception as e:
         # エラーが発生した場合の処理
