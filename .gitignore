@@ -38,5 +38,4 @@ Thumbs.db
 # Data files
 *.csv
 *.json
-data/
 results/
