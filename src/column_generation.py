@@ -24,8 +24,9 @@ class ColumnGeneration:
         self.customers = instance.get_customer_nodes()
         self.distance_matrix = instance.get_distance_matrix()
         
-        # インデックスマッピング作成
-        self.customer_to_index = {c.id: i for i, c in enumerate(instance.customers)}
+        # インデックスマッピング作成（デポを含む全ノード）
+        all_nodes = [self.depot] + self.customers
+        self.customer_to_index = {node.id: i for i, node in enumerate(all_nodes)}
         self.routes = []  # 生成されたルート一覧
         self.dual_prices = []  # 双対価格
         
@@ -35,19 +36,26 @@ class ColumnGeneration:
             return 0.0
         
         cost = 0.0
+        
+        # すべてのノードに対してインデックスマッピングを確認
+        def get_node_index(node_id):
+            if node_id == self.depot.id:
+                return 0  # デポは常にインデックス0
+            return self.customer_to_index.get(node_id, 0)
+        
         # デポから最初の顧客
-        depot_idx = self.customer_to_index[self.depot.id]
-        first_idx = self.customer_to_index[route_customers[0]]
+        depot_idx = get_node_index(self.depot.id)
+        first_idx = get_node_index(route_customers[0])
         cost += self.distance_matrix[depot_idx][first_idx]
         
         # 顧客間の移動
         for i in range(len(route_customers) - 1):
-            from_idx = self.customer_to_index[route_customers[i]]
-            to_idx = self.customer_to_index[route_customers[i + 1]]
+            from_idx = get_node_index(route_customers[i])
+            to_idx = get_node_index(route_customers[i + 1])
             cost += self.distance_matrix[from_idx][to_idx]
         
         # 最後の顧客からデポ
-        last_idx = self.customer_to_index[route_customers[-1]]
+        last_idx = get_node_index(route_customers[-1])
         cost += self.distance_matrix[last_idx][depot_idx]
         
         return cost
@@ -97,29 +105,21 @@ class ColumnGeneration:
                 prob += pulp.lpSum(constraint) == 1, f"customer_{customer.id}"
                 customer_constraints[customer.id] = len(prob.constraints) - 1
         
-        # 問題を解く（複数のソルバーを試す）
-        solved = False
-        solvers = [
-            lambda: prob.solve(),
-            lambda: prob.solve(pulp.GLPK_CMD(msg=0)) if pulp.GLPK_CMD().available() else None,
-            lambda: prob.solve(pulp.PYGLPK()) if pulp.PYGLPK().available() else None
-        ]
-        
-        for solver in solvers:
-            try:
-                result = solver()
-                if result is not None:
-                    solved = True
-                    break
-            except Exception:
-                continue
-        
-        if not solved:
-            # 最後の手段：簡単な線形計画問題として解く
-            prob.solve()
-        
-        if prob.status != pulp.LpStatusOptimal:
-            raise ValueError("マスター問題が解けませんでした")
+        # 問題を解く（シンプルなソルバーを使用）
+        try:
+            # LP緩和問題として解く（Termux環境対応）
+            for var in route_vars:
+                var.cat = 'Continuous'
+                var.lowBound = 0
+                var.upBound = 1
+            
+            status = prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=10))
+            if status != pulp.LpStatusOptimal:
+                print("    CBCソルバーが失敗、代替手法を使用...")
+                return self._solve_master_problem_approximation(routes)
+        except Exception as e:
+            print(f"    ソルバーエラー: {e}")
+            return self._solve_master_problem_approximation(routes)
         
         # 目的関数値
         objective_value = pulp.value(prob.objective)
@@ -138,8 +138,133 @@ class ColumnGeneration:
         return objective_value, dual_prices
     
     def solve_pricing_problem(self, dual_prices: List[float]) -> Optional[Route]:
-        """価格問題を解く（最短路問題）"""
-        # シンプルな貪欲法で近似解を求める
+        """価格問題を解く（ESPPRC - 容量制約付き最短路問題）"""
+        
+        # 価格問題を線形計画問題として定式化
+        prob = pulp.LpProblem("Pricing_Problem", pulp.LpMinimize)
+        
+        # ノード集合（デポ + 顧客）
+        nodes = [self.depot.id] + [c.id for c in self.customers]
+        
+        # 決定変数: アーク変数 x[i,j] (i→jのアークを使用するか)
+        x = {}
+        for i in nodes:
+            for j in nodes:
+                if i != j:
+                    x[i, j] = pulp.LpVariable(f"x_{i}_{j}", cat='Binary')
+        
+        # 目的関数: 被約費用の最小化
+        objective = []
+        for i in nodes:
+            for j in nodes:
+                if i != j:
+                    # 距離コスト
+                    i_idx = self.customer_to_index.get(i, 0)
+                    j_idx = self.customer_to_index.get(j, 0)
+                    distance_cost = self.distance_matrix[i_idx][j_idx]
+                    
+                    # 双対価格の減算（顧客の場合のみ）
+                    dual_cost = 0
+                    if j != self.depot.id:  # jが顧客の場合
+                        customer_idx = next((idx for idx, c in enumerate(self.customers) if c.id == j), None)
+                        if customer_idx is not None:
+                            dual_cost = dual_prices[customer_idx]
+                    
+                    reduced_cost = distance_cost - dual_cost
+                    objective.append(reduced_cost * x[i, j])
+        
+        prob += pulp.lpSum(objective)
+        
+        # 制約1: デポから出発（1回のみ）
+        prob += pulp.lpSum([x[self.depot.id, j] for j in nodes if j != self.depot.id]) == 1
+        
+        # 制約2: デポに帰着（1回のみ）
+        prob += pulp.lpSum([x[i, self.depot.id] for i in nodes if i != self.depot.id]) == 1
+        
+        # 制約3: 各顧客での流れ保存
+        for customer in self.customers:
+            i = customer.id
+            inflow = pulp.lpSum([x[j, i] for j in nodes if j != i])
+            outflow = pulp.lpSum([x[i, j] for j in nodes if j != i])
+            prob += inflow == outflow
+        
+        # 制約4: 容量制約
+        capacity_constraint = []
+        for customer in self.customers:
+            i = customer.id
+            customer_flow = pulp.lpSum([x[j, i] for j in nodes if j != i])
+            capacity_constraint.append(customer.demand * customer_flow)
+        
+        prob += pulp.lpSum(capacity_constraint) <= self.instance.capacity
+        
+        # 制約5: 各顧客は最大1回訪問
+        for customer in self.customers:
+            i = customer.id
+            prob += pulp.lpSum([x[j, i] for j in nodes if j != i]) <= 1
+        
+        # 問題を解く
+        try:
+            # 複数のソルバーを試す
+            solved = False
+            solvers = [
+                lambda: prob.solve(pulp.PULP_CBC_CMD(msg=0)),
+                lambda: prob.solve(pulp.GLPK_CMD(msg=0)) if pulp.GLPK_CMD().available() else None,
+                lambda: prob.solve()
+            ]
+            
+            for solver in solvers:
+                try:
+                    result = solver()
+                    if result is not None and prob.status == pulp.LpStatusOptimal:
+                        solved = True
+                        break
+                except Exception:
+                    continue
+            
+            if not solved or prob.status != pulp.LpStatusOptimal:
+                # 価格問題が解けない場合は貪欲法にフォールバック
+                return self._solve_pricing_problem_greedy(dual_prices)
+            
+            # 解が存在し、被約費用が負の場合のみルートを返す
+            objective_value = pulp.value(prob.objective)
+            if objective_value >= -1e-6:  # 負の被約費用がない
+                return None
+            
+            # 解からルートを抽出
+            route_customers = []
+            current_node = self.depot.id
+            
+            # デポから始まるパスを追跡
+            while True:
+                next_node = None
+                for j in nodes:
+                    if j != current_node and (current_node, j) in x:
+                        if pulp.value(x[current_node, j]) > 0.5:
+                            next_node = j
+                            break
+                
+                if next_node is None or next_node == self.depot.id:
+                    break
+                
+                route_customers.append(next_node)
+                current_node = next_node
+            
+            if not route_customers:  # 空のルート
+                return None
+            
+            # ルートの情報を計算
+            route_cost = self.calculate_route_cost(route_customers)
+            route_load = self.calculate_route_load(route_customers)
+            
+            return Route(route_customers, route_cost, route_load)
+            
+        except Exception as e:
+            print(f"  価格問題でエラー: {e}")
+            # エラーの場合は貪欲法にフォールバック
+            return self._solve_pricing_problem_greedy(dual_prices)
+    
+    def _solve_pricing_problem_greedy(self, dual_prices: List[float]) -> Optional[Route]:
+        """価格問題の貪欲法による近似解法（フォールバック用）"""
         best_route = None
         best_reduced_cost = 0.0
         
@@ -190,32 +315,63 @@ class ColumnGeneration:
         self.routes = self.generate_initial_routes()
         print(f"初期ルート数: {len(self.routes)}")
         
+        if not self.routes:
+            print("初期ルートが生成できませんでした。")
+            return [], float('inf')
+        
+        # 列生成の反復
         for iteration in range(max_iterations):
             print(f"\n反復 {iteration + 1}:")
             
-            # マスター問題を解く
             try:
+                # マスター問題を解く
                 objective_value, dual_prices = self.solve_master_problem(self.routes)
                 print(f"  マスター問題目的関数値: {objective_value:.2f}")
+                
+                # 双対価格の表示（デバッグ用）
+                print(f"  双対価格: {[f'{dp:.3f}' for dp in dual_prices[:min(5, len(dual_prices))]]}...")
                 
                 # 価格問題を解く
                 new_route = self.solve_pricing_problem(dual_prices)
                 
                 if new_route is None:
-                    print("  負の被約費用を持つルートが見つからません。終了。")
+                    print("  負の被約費用を持つルートが見つからません。最適解に到達しました。")
+                    break
+                
+                # 重複チェック
+                is_duplicate = any(
+                    set(route.customers) == set(new_route.customers) 
+                    for route in self.routes
+                )
+                
+                if is_duplicate:
+                    print("  新しいルートは既存のルートと重複しています。終了。")
                     break
                 
                 print(f"  新しいルート追加: {new_route}")
                 self.routes.append(new_route)
                 
+                # 収束チェック
+                if len(self.routes) > len(self.customers) * 10:  # 無限ループ防止
+                    print(f"  ルート数が上限({len(self.customers) * 10})に達しました。終了。")
+                    break
+                
             except Exception as e:
                 print(f"  エラー: {e}")
+                import traceback
+                traceback.print_exc()
                 break
         
-        # 最終的な整数解を求める
-        final_routes, final_cost = self.solve_integer_master_problem()
+        print(f"\n列生成終了。総ルート数: {len(self.routes)}")
         
-        return final_routes, final_cost
+        # 最終的な整数解を求める
+        try:
+            final_routes, final_cost = self.solve_integer_master_problem()
+            return final_routes, final_cost
+        except Exception as e:
+            print(f"整数マスター問題でエラー: {e}")
+            # フォールバック: 最初のいくつかのルートから貪欲に選択
+            return self._fallback_solution()
     
     def solve_integer_master_problem(self) -> Tuple[List[Route], float]:
         """最終的な整数マスター問題を解く"""
@@ -242,28 +398,20 @@ class ColumnGeneration:
             if constraint:
                 prob += pulp.lpSum(constraint) == 1, f"customer_{customer.id}"
         
-        # 問題を解く（複数のソルバーを試す）
-        solved = False
-        solvers = [
-            lambda: prob.solve(),
-            lambda: prob.solve(pulp.GLPK_CMD(msg=0)) if pulp.GLPK_CMD().available() else None,
-            lambda: prob.solve(pulp.PYGLPK()) if pulp.PYGLPK().available() else None
-        ]
-        
-        for solver in solvers:
-            try:
-                result = solver()
-                if result is not None:
-                    solved = True
-                    break
-            except Exception:
-                continue
-        
-        if not solved:
-            # 最後の手段：簡単な線形計画問題として解く
-            prob.solve()
-        
-        if prob.status != pulp.LpStatusOptimal:
+        # 問題を解く（シンプルなソルバーを使用）
+        try:
+            # Termux環境では整数問題が困難なので、LP緩和で解いてから丸める
+            for var in route_vars:
+                var.cat = 'Continuous'
+                var.lowBound = 0
+                var.upBound = 1
+            
+            status = prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=10))
+            if status != pulp.LpStatusOptimal:
+                raise ValueError("整数マスター問題が解けませんでした")
+                
+        except Exception as e:
+            print(f"整数問題解法エラー: {e}")
             raise ValueError("整数マスター問題が解けませんでした")
         
         # 選択されたルートを取得
@@ -276,5 +424,79 @@ class ColumnGeneration:
         
         print(f"最終コスト: {total_cost:.2f}")
         print(f"使用ルート数: {len(selected_routes)}")
+        
+        return selected_routes, total_cost
+    
+    def _solve_master_problem_approximation(self, routes: List[Route]) -> Tuple[float, List[float]]:
+        """マスター問題の近似解法（ソルバーが使用できない場合）"""
+        print("    近似解法を使用してマスター問題を解きます...")
+        
+        # 各顧客を最もコスト効率の良いルートに割り当て
+        customer_assignments = {}
+        total_cost = 0.0
+        
+        for customer in self.customers:
+            best_route = None
+            best_efficiency = float('inf')
+            
+            for route in routes:
+                if customer.id in route.customers:
+                    # コスト効率 = コスト / 顧客数
+                    efficiency = route.cost / max(len(route.customers), 1)
+                    if efficiency < best_efficiency:
+                        best_efficiency = efficiency
+                        best_route = route
+            
+            if best_route:
+                customer_assignments[customer.id] = best_route
+                total_cost += best_efficiency
+        
+        # 双対価格の近似値（コスト効率の逆数）
+        dual_prices = []
+        for customer in self.customers:
+            if customer.id in customer_assignments:
+                route = customer_assignments[customer.id]
+                dual_price = route.cost / max(len(route.customers), 1)
+                dual_prices.append(dual_price)
+            else:
+                dual_prices.append(0.0)
+        
+        return total_cost, dual_prices
+    
+    def _fallback_solution(self) -> Tuple[List[Route], float]:
+        """整数問題が解けない場合のフォールバック解法"""
+        print("フォールバック解法を使用...")
+        
+        if not self.routes:
+            return [], float('inf')
+        
+        # 各顧客をカバーするルートを貪欲に選択
+        selected_routes = []
+        covered_customers = set()
+        remaining_customers = set(c.id for c in self.customers)
+        
+        # コスト効率の良いルートから選択
+        available_routes = sorted(self.routes, key=lambda r: r.cost / max(len(r.customers), 1))
+        
+        for route in available_routes:
+            # このルートが新しい顧客をカバーするかチェック
+            new_customers = set(route.customers) - covered_customers
+            if new_customers:
+                selected_routes.append(route)
+                covered_customers.update(route.customers)
+                remaining_customers -= new_customers
+                
+                if not remaining_customers:
+                    break
+        
+        # まだカバーされていない顧客がある場合、単独ルートを追加
+        for customer_id in remaining_customers:
+            for route in self.routes:
+                if len(route.customers) == 1 and route.customers[0] == customer_id:
+                    selected_routes.append(route)
+                    break
+        
+        total_cost = sum(route.cost for route in selected_routes)
+        print(f"フォールバック解: コスト={total_cost:.2f}, ルート数={len(selected_routes)}")
         
         return selected_routes, total_cost

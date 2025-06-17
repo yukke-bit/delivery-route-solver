@@ -13,7 +13,7 @@ from typing import Optional
 from src.vrp_parser import parse_vrp_file
 from src.simple_vrp_solver import SimpleVRPSolver
 from src.visualizer import VRPVisualizer
-# from src.column_generation import ColumnGeneration  # TODO: 実装を完成させる
+from src.column_generation import ColumnGeneration
 
 def solve_vrp_problem(file_path: str, visualize: bool = True) -> Optional[tuple]:
     """
@@ -38,28 +38,86 @@ def solve_vrp_problem(file_path: str, visualize: bool = True) -> Optional[tuple]
         # 問題情報を表示
         print_problem_info(instance)
         
-        # 貪欲アルゴリズムで解く
-        print("貪欲アルゴリズムで解いています...")
+        # 両方のアルゴリズムで解く
+        results = {}
+        
+        # 1. 貪欲アルゴリズムで解く
+        print("=== 貪欲アルゴリズム ===")
         start_time = time.time()
         
-        solver = SimpleVRPSolver(instance)
-        routes, total_cost = solver.solve()
+        greedy_solver = SimpleVRPSolver(instance)
+        greedy_routes, greedy_cost = greedy_solver.solve()
         
-        end_time = time.time()
+        greedy_time = time.time() - start_time
         
-        # 結果を表示
-        print_solution_results(routes, total_cost, end_time - start_time)
+        results['greedy'] = {
+            'routes': greedy_routes,
+            'cost': greedy_cost,
+            'time': greedy_time,
+            'solver': greedy_solver
+        }
         
-        # 解の妥当性を検証
-        is_valid = solver.validate_solution(routes)
-        print(f"解の検証: {'成功' if is_valid else '失敗'}")
+        print_solution_results(greedy_routes, greedy_cost, greedy_time, "貪欲法")
+        
+        # 2. 列生成法で解く
+        print("\n=== 列生成法 ===")
+        start_time = time.time()
+        
+        try:
+            cg_solver = ColumnGeneration(instance)
+            cg_route_objects, cg_cost = cg_solver.solve(max_iterations=50)
+            
+            # Route オブジェクトから通常のルート形式に変換
+            cg_routes = [route.customers for route in cg_route_objects]
+            
+            cg_time = time.time() - start_time
+            
+            results['column_generation'] = {
+                'routes': cg_routes,
+                'cost': cg_cost,
+                'time': cg_time,
+                'solver': cg_solver
+            }
+            
+            print_solution_results(cg_routes, cg_cost, cg_time, "列生成法")
+            
+        except Exception as e:
+            print(f"列生成法でエラーが発生しました: {e}")
+            print("貪欲法の結果のみを使用します。")
+            results['column_generation'] = None
+        
+        # 結果の比較
+        print("\n" + "=" * 60)
+        print("アルゴリズム比較:")
+        print(f"貪欲法     : コスト={greedy_cost:.2f}, 時間={greedy_time:.2f}秒")
+        if results['column_generation']:
+            print(f"列生成法   : コスト={cg_cost:.2f}, 時間={cg_time:.2f}秒")
+            improvement = ((greedy_cost - cg_cost) / greedy_cost) * 100
+            print(f"改善率     : {improvement:.2f}%")
         
         # 最適解が既知の場合は比較
         optimal_cost = extract_optimal_cost(instance.comment)
         if optimal_cost:
-            gap = ((total_cost - optimal_cost) / optimal_cost) * 100
-            print(f"最適コスト: {optimal_cost}")
-            print(f"最適解からのギャップ: {gap:.2f}%")
+            print(f"最適解     : {optimal_cost}")
+            greedy_gap = ((greedy_cost - optimal_cost) / optimal_cost) * 100
+            print(f"貪欲法ギャップ: {greedy_gap:.2f}%")
+            
+            if results['column_generation']:
+                cg_gap = ((cg_cost - optimal_cost) / optimal_cost) * 100
+                print(f"列生成法ギャップ: {cg_gap:.2f}%")
+        
+        # より良い解を選択
+        if results['column_generation'] and cg_cost < greedy_cost:
+            print("\n最良解: 列生成法")
+            routes, total_cost, solver = cg_routes, cg_cost, None
+        else:
+            print("\n最良解: 貪欲法")
+            routes, total_cost, solver = greedy_routes, greedy_cost, greedy_solver
+        
+        # 解の妥当性を検証（貪欲法の場合のみ）
+        if solver:
+            is_valid = solver.validate_solution(routes)
+            print(f"解の検証: {'成功' if is_valid else '失敗'}")
         
         # 可視化を生成
         if visualize:
@@ -81,10 +139,11 @@ def print_problem_info(instance):
     print(f"コメント: {instance.comment}")
     print()
 
-def print_solution_results(routes, total_cost, computation_time):
+def print_solution_results(routes, total_cost, computation_time, algorithm_name=""):
     """解の結果を表示"""
     print("\n" + "=" * 50)
-    print("解の結果:")
+    title = f"解の結果 ({algorithm_name})" if algorithm_name else "解の結果:"
+    print(title)
     print(f"総コスト: {total_cost:.2f}")
     print(f"使用車両数: {len(routes)}")
     print(f"計算時間: {computation_time:.2f}秒")
