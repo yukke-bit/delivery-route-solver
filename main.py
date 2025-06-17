@@ -92,7 +92,7 @@ def main():
             
             # VRP解を可視化
             print("Generating VRP solution visualization...")
-            solution_title = f"VRP Solution: {instance.name} (Greedy Algorithm)"
+            solution_title = f"VRP Solution: {instance.name} - Greedy Algorithm"
             visualizer.plot_solution(
                 routes=routes,
                 title=solution_title,

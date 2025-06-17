@@ -33,6 +33,16 @@ class VRPVisualizer:
             '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
         ]
     
+    def _clean_text(self, text: str) -> str:
+        """テキストから問題のある文字を除去してASCII安全にする"""
+        # 括弧を除去し、安全な文字のみ保持
+        text = text.replace('(', '').replace(')', '')
+        text = text.replace(':', ' -')
+        # 連続スペースを単一スペースに
+        import re
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    
     def plot_solution(self, routes: List[List[int]], title: str = "VRP Solution Visualization", 
                      save_path: str = None, show_plot: bool = True) -> None:
         """VRP解を可視化してプロット
@@ -44,7 +54,8 @@ class VRPVisualizer:
             show_plot: プロットを表示するかどうか
         """
         plt.figure(figsize=(12, 8))
-        plt.title(title, fontsize=16, fontweight='bold')
+        clean_title = self._clean_text(title)
+        plt.title(clean_title, fontsize=16, fontweight='bold')
         
         # デポを特別な記号で表示
         plt.scatter(self.depot.x, self.depot.y, 
@@ -185,7 +196,9 @@ class VRPVisualizer:
                           show_plot=False)
         
         # 全体のタイトル
-        fig.suptitle(f'VRP Solution Comparison: {self.instance.name}', fontsize=16, fontweight='bold')
+        main_title = f'VRP Solution Comparison - {self.instance.name}'
+        clean_main_title = self._clean_text(main_title)
+        fig.suptitle(clean_main_title, fontsize=16, fontweight='bold')
         
         plt.tight_layout()
         
@@ -203,7 +216,9 @@ class VRPVisualizer:
             show_plot: プロットを表示するかどうか
         """
         plt.figure(figsize=(10, 8))
-        plt.title(f'VRP Problem Instance: {self.instance.name}', fontsize=16, fontweight='bold')
+        title = f'VRP Problem Instance - {self.instance.name}'
+        clean_title = self._clean_text(title)
+        plt.title(clean_title, fontsize=16, fontweight='bold')
         
         # デポを表示
         plt.scatter(self.depot.x, self.depot.y, 
