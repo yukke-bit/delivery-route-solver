@@ -70,13 +70,59 @@ class ColumnGeneration:
         return load <= self.instance.capacity
     
     def generate_initial_routes(self) -> List[Route]:
-        """初期ルート生成（各顧客への単独ルート）"""
+        """初期ルート生成（多様なルートパターンを作成）"""
         routes = []
+        
+        # 1. 各顧客への単独ルート
         for customer in self.customers:
             if customer.demand <= self.instance.capacity:
                 cost = self.calculate_route_cost([customer.id])
                 load = customer.demand
                 routes.append(Route([customer.id], cost, load))
+        
+        # 2. 貪欲法による複数顧客ルート
+        remaining_customers = self.customers.copy()
+        
+        while remaining_customers:
+            current_route = []
+            current_load = 0
+            current_pos = self.depot
+            
+            # 最も遠い顧客から開始（多様性確保）
+            if remaining_customers:
+                farthest_customer = max(remaining_customers, 
+                    key=lambda c: self.instance.euclidean_distance(self.depot, c))
+                
+                current_route.append(farthest_customer.id)
+                current_load += farthest_customer.demand
+                current_pos = farthest_customer
+                remaining_customers.remove(farthest_customer)
+            
+            # 貪欲にルートを拡張
+            while remaining_customers:
+                best_next = None
+                best_distance = float('inf')
+                
+                for candidate in remaining_customers:
+                    if current_load + candidate.demand <= self.instance.capacity:
+                        distance = self.instance.euclidean_distance(current_pos, candidate)
+                        if distance < best_distance:
+                            best_distance = distance
+                            best_next = candidate
+                
+                if best_next is None:
+                    break
+                
+                current_route.append(best_next.id)
+                current_load += best_next.demand
+                current_pos = best_next
+                remaining_customers.remove(best_next)
+            
+            # ルートが有効な場合は追加
+            if current_route:
+                cost = self.calculate_route_cost(current_route)
+                routes.append(Route(current_route, cost, current_load))
+        
         return routes
     
     def solve_master_problem(self, routes: List[Route]) -> Tuple[float, List[float]]:
@@ -105,18 +151,31 @@ class ColumnGeneration:
                 prob += pulp.lpSum(constraint) == 1, f"customer_{customer.id}"
                 customer_constraints[customer.id] = len(prob.constraints) - 1
         
-        # 問題を解く（シンプルなソルバーを使用）
+        # 問題を解く（優先順位: GLPK → CBC → 近似解法）
         try:
-            # LP緩和問題として解く（Termux環境対応）
+            # LP緩和問題として解く
             for var in route_vars:
                 var.cat = 'Continuous'
                 var.lowBound = 0
                 var.upBound = 1
             
-            status = prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=10))
-            if status != pulp.LpStatusOptimal:
-                print("    CBCソルバーが失敗、代替手法を使用...")
-                return self._solve_master_problem_approximation(routes)
+            # GLPKを優先的に使用（Termux環境で安定）
+            if pulp.GLPK_CMD().available():
+                status = prob.solve(pulp.GLPK_CMD(msg=0, timeLimit=30))
+                if status == pulp.LpStatusOptimal:
+                    print("    GLPKソルバーで正常に解決")
+                else:
+                    print(f"    GLPK結果: {pulp.LpStatus[status]}")
+                    return self._solve_master_problem_approximation(routes)
+            else:
+                # フォールバック: CBC
+                status = prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=10))
+                if status == pulp.LpStatusOptimal:
+                    print("    CBCソルバーで正常に解決")
+                else:
+                    print("    CBCソルバーが失敗、代替手法を使用...")
+                    return self._solve_master_problem_approximation(routes)
+                    
         except Exception as e:
             print(f"    ソルバーエラー: {e}")
             return self._solve_master_problem_approximation(routes)
@@ -128,12 +187,28 @@ class ColumnGeneration:
         dual_prices = []
         for customer in self.customers:
             constraint_name = f"customer_{customer.id}"
+            dual_value = 0.0
+            
+            # 制約から双対価格を取得
             for constraint in prob.constraints.values():
-                if constraint.name == constraint_name:
-                    dual_prices.append(constraint.pi if constraint.pi is not None else 0.0)
+                if hasattr(constraint, 'name') and constraint.name == constraint_name:
+                    if hasattr(constraint, 'pi') and constraint.pi is not None:
+                        dual_value = constraint.pi
                     break
-            else:
-                dual_prices.append(0.0)
+            
+            # 双対価格が取得できない場合はコスト効率で近似
+            if dual_value == 0.0:
+                # この顧客を含む最も効率的なルートのコスト効率を使用
+                min_efficiency = float('inf')
+                for route in routes:
+                    if customer.id in route.customers:
+                        efficiency = route.cost / max(len(route.customers), 1)
+                        min_efficiency = min(min_efficiency, efficiency)
+                
+                if min_efficiency != float('inf'):
+                    dual_value = min_efficiency
+            
+            dual_prices.append(dual_value)
         
         return objective_value, dual_prices
     
@@ -163,14 +238,14 @@ class ColumnGeneration:
                     j_idx = self.customer_to_index.get(j, 0)
                     distance_cost = self.distance_matrix[i_idx][j_idx]
                     
-                    # 双対価格の減算（顧客の場合のみ）
-                    dual_cost = 0
+                    # 双対価格の減算：顧客を訪問する時のみ
+                    reduced_cost = distance_cost
                     if j != self.depot.id:  # jが顧客の場合
                         customer_idx = next((idx for idx, c in enumerate(self.customers) if c.id == j), None)
-                        if customer_idx is not None:
-                            dual_cost = dual_prices[customer_idx]
+                        if customer_idx is not None and customer_idx < len(dual_prices):
+                            # アークコストから訪問先顧客の双対価格を減算
+                            reduced_cost = distance_cost - dual_prices[customer_idx]
                     
-                    reduced_cost = distance_cost - dual_cost
                     objective.append(reduced_cost * x[i, j])
         
         prob += pulp.lpSum(objective)
@@ -202,27 +277,33 @@ class ColumnGeneration:
             i = customer.id
             prob += pulp.lpSum([x[j, i] for j in nodes if j != i]) <= 1
         
-        # 問題を解く
+        # 問題を解く（優先順位: GLPK → CBC → 貪欲法）
         try:
-            # 複数のソルバーを試す
             solved = False
-            solvers = [
-                lambda: prob.solve(pulp.PULP_CBC_CMD(msg=0)),
-                lambda: prob.solve(pulp.GLPK_CMD(msg=0)) if pulp.GLPK_CMD().available() else None,
-                lambda: prob.solve()
-            ]
             
-            for solver in solvers:
+            # GLPKを優先使用
+            if pulp.GLPK_CMD().available():
                 try:
-                    result = solver()
-                    if result is not None and prob.status == pulp.LpStatusOptimal:
+                    status = prob.solve(pulp.GLPK_CMD(msg=0, timeLimit=30))
+                    if status == pulp.LpStatusOptimal:
                         solved = True
-                        break
-                except Exception:
-                    continue
+                        print("    価格問題をGLPKで解決")
+                except Exception as e:
+                    print(f"    GLPK価格問題エラー: {e}")
+            
+            # フォールバック: CBC
+            if not solved:
+                try:
+                    status = prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=10))
+                    if status == pulp.LpStatusOptimal:
+                        solved = True
+                        print("    価格問題をCBCで解決")
+                except Exception as e:
+                    print(f"    CBC価格問題エラー: {e}")
             
             if not solved or prob.status != pulp.LpStatusOptimal:
                 # 価格問題が解けない場合は貪欲法にフォールバック
+                print("    価格問題LP解法失敗、貪欲法を使用")
                 return self._solve_pricing_problem_greedy(dual_prices)
             
             # 解が存在し、被約費用が負の場合のみルートを返す
@@ -398,16 +479,37 @@ class ColumnGeneration:
             if constraint:
                 prob += pulp.lpSum(constraint) == 1, f"customer_{customer.id}"
         
-        # 問題を解く（シンプルなソルバーを使用）
+        # 問題を解く（優先順位: GLPK → CBC）
         try:
-            # Termux環境では整数問題が困難なので、LP緩和で解いてから丸める
+            # まずLP緩和で解く
             for var in route_vars:
                 var.cat = 'Continuous'
                 var.lowBound = 0
                 var.upBound = 1
             
-            status = prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=10))
-            if status != pulp.LpStatusOptimal:
+            solved = False
+            
+            # GLPKを優先使用
+            if pulp.GLPK_CMD().available():
+                try:
+                    status = prob.solve(pulp.GLPK_CMD(msg=0, timeLimit=60))
+                    if status == pulp.LpStatusOptimal:
+                        solved = True
+                        print("整数マスター問題をGLPK（LP緩和）で解決")
+                except Exception as e:
+                    print(f"GLPK整数問題エラー: {e}")
+            
+            # フォールバック: CBC
+            if not solved:
+                try:
+                    status = prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=30))
+                    if status == pulp.LpStatusOptimal:
+                        solved = True
+                        print("整数マスター問題をCBC（LP緩和）で解決")
+                except Exception as e:
+                    print(f"CBC整数問題エラー: {e}")
+            
+            if not solved:
                 raise ValueError("整数マスター問題が解けませんでした")
                 
         except Exception as e:
