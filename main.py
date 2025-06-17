@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Vehicle Routing Problem (VRP) Solver
-Solves VRP using greedy algorithm and column generation
+配送経路問題（VRP）ソルバー
+貪欲アルゴリズムと列生成法を使用してVRPを解く
 """
 
 import os
@@ -13,33 +13,33 @@ from typing import Optional
 from src.vrp_parser import parse_vrp_file
 from src.simple_vrp_solver import SimpleVRPSolver
 from src.visualizer import VRPVisualizer
-# from src.column_generation import ColumnGeneration  # TODO: Complete implementation
+# from src.column_generation import ColumnGeneration  # TODO: 実装を完成させる
 
 def solve_vrp_problem(file_path: str, visualize: bool = True) -> Optional[tuple]:
     """
-    Solve a VRP problem from file
+    ファイルからVRP問題を解く
     
     Args:
-        file_path: Path to VRP file
-        visualize: Whether to generate visualization
+        file_path: VRPファイルのパス
+        visualize: 可視化を生成するかどうか
     
     Returns:
-        Tuple of (routes, total_cost) if successful, None if failed
+        成功時は(routes, total_cost)のタプル、失敗時はNone
     """
     if not os.path.exists(file_path):
         print(f"Error: File {file_path} not found")
         return None
     
     try:
-        # Load VRP instance
-        print(f"Loading VRP file: {file_path}")
+        # VRPインスタンスを読み込み
+        print(f"VRPファイルを読み込み中: {file_path}")
         instance = parse_vrp_file(file_path)
         
-        # Display problem information
+        # 問題情報を表示
         print_problem_info(instance)
         
-        # Solve using greedy algorithm
-        print("Solving with greedy algorithm...")
+        # 貪欲アルゴリズムで解く
+        print("貪欲アルゴリズムで解いています...")
         start_time = time.time()
         
         solver = SimpleVRPSolver(instance)
@@ -47,58 +47,58 @@ def solve_vrp_problem(file_path: str, visualize: bool = True) -> Optional[tuple]
         
         end_time = time.time()
         
-        # Display results
+        # 結果を表示
         print_solution_results(routes, total_cost, end_time - start_time)
         
-        # Validate solution
+        # 解の妥当性を検証
         is_valid = solver.validate_solution(routes)
-        print(f"Solution validation: {'PASS' if is_valid else 'FAIL'}")
+        print(f"解の検証: {'成功' if is_valid else '失敗'}")
         
-        # Compare with optimal if known
+        # 最適解が既知の場合は比較
         optimal_cost = extract_optimal_cost(instance.comment)
         if optimal_cost:
             gap = ((total_cost - optimal_cost) / optimal_cost) * 100
-            print(f"Optimal cost: {optimal_cost}")
-            print(f"Gap from optimal: {gap:.2f}%")
+            print(f"最適コスト: {optimal_cost}")
+            print(f"最適解からのギャップ: {gap:.2f}%")
         
-        # Generate visualization
+        # 可視化を生成
         if visualize:
             generate_visualizations(instance, routes, file_path)
         
         return routes, total_cost
         
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print(f"エラーが発生しました: {e}")
         import traceback
         traceback.print_exc()
         return None
 
 def print_problem_info(instance):
-    """Print VRP problem information"""
-    print(f"Problem name: {instance.name}")
-    print(f"Customers: {len(instance.get_customer_nodes())}")
-    print(f"Vehicle capacity: {instance.capacity}")
-    print(f"Comment: {instance.comment}")
+    """VRP問題情報を表示"""
+    print(f"問題名: {instance.name}")
+    print(f"顧客数: {len(instance.get_customer_nodes())}")
+    print(f"車両容量: {instance.capacity}")
+    print(f"コメント: {instance.comment}")
     print()
 
 def print_solution_results(routes, total_cost, computation_time):
-    """Print solution results"""
+    """解の結果を表示"""
     print("\n" + "=" * 50)
-    print("SOLUTION RESULTS:")
-    print(f"Total cost: {total_cost:.2f}")
-    print(f"Number of vehicles: {len(routes)}")
-    print(f"Computation time: {computation_time:.2f}s")
+    print("解の結果:")
+    print(f"総コスト: {total_cost:.2f}")
+    print(f"使用車両数: {len(routes)}")
+    print(f"計算時間: {computation_time:.2f}秒")
     print()
     
-    print("Route details:")
+    print("ルート詳細:")
     for i, route in enumerate(routes, 1):
         route_str = " -> ".join(map(str, route))
-        print(f"  Vehicle {i}: 0 -> {route_str} -> 0")
+        print(f"  車両 {i}: 0 -> {route_str} -> 0")
 
 def extract_optimal_cost(comment: str) -> Optional[float]:
-    """Extract optimal cost from comment string"""
+    """コメント文字列から最適コストを抽出"""
     try:
-        # Look for "Optimal value: XXX" pattern
+        # "Optimal value: XXX" パターンを探す
         import re
         match = re.search(r'Optimal value:\s*(\d+)', comment)
         if match:
@@ -108,25 +108,25 @@ def extract_optimal_cost(comment: str) -> Optional[float]:
     return None
 
 def generate_visualizations(instance, routes, file_path):
-    """Generate visualization images"""
+    """可視化画像を生成"""
     print("\n" + "=" * 50)
-    print("GENERATING VISUALIZATIONS")
+    print("可視化を生成中")
     
     try:
-        # Ensure results directory exists
+        # resultsディレクトリが存在することを確認
         Path("results").mkdir(exist_ok=True)
         
         visualizer = VRPVisualizer(instance)
         
-        # Generate problem instance visualization
-        print("Creating problem instance visualization...")
+        # 問題インスタンスの可視化を生成
+        print("問題インスタンスの可視化を作成中...")
         visualizer.plot_problem_instance(
             save_path="results/problem_instance.png",
             show_plot=False
         )
         
-        # Generate solution visualization
-        print("Creating solution visualization...")
+        # 解の可視化を生成
+        print("解の可視化を作成中...")
         solution_title = f"VRP Solution - {instance.name} - Greedy Algorithm"
         visualizer.plot_solution(
             routes=routes,
@@ -135,30 +135,30 @@ def generate_visualizations(instance, routes, file_path):
             show_plot=False
         )
         
-        print("Visualization images saved to results/ directory:")
-        print("- problem_instance.png: Problem instance (customer distribution)")
-        print("- solution_visualization.png: VRP solution visualization")
+        print("可視化画像を results/ ディレクトリに保存しました:")
+        print("- problem_instance.png: 問題インスタンス（顧客分布）")
+        print("- solution_visualization.png: VRP解の可視化")
         
     except Exception as viz_error:
-        print(f"Visualization error: {viz_error}")
-        print("matplotlib may not be properly installed")
+        print(f"可視化エラー: {viz_error}")
+        print("matplotlibが正しくインストールされていない可能性があります")
 
 def main():
-    """Main entry point"""
-    print("Vehicle Routing Problem (VRP) Solver")
+    """メインエントリポイント"""
+    print("配送経路問題（VRP）ソルバー")
     print("=" * 50)
     
-    # Default test file
+    # デフォルトテストファイル
     test_file = "data/instances/A-n32-k5.vrp"
     
-    # Solve VRP problem
+    # VRP問題を解く
     result = solve_vrp_problem(test_file, visualize=True)
     
     if result is None:
-        print("Failed to solve VRP problem")
+        print("VRP問題の解決に失敗しました")
         sys.exit(1)
     
-    print("\nVRP solving completed successfully!")
+    print("\nVRP解決が正常に完了しました!")
 
 if __name__ == "__main__":
     main()

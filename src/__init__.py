@@ -1,23 +1,23 @@
 """
-Vehicle Routing Problem (VRP) Solver Package
+配送経路問題（VRP）ソルバーパッケージ
 
-This package provides tools for solving Vehicle Routing Problems including:
-- VRP file parsing (TSPLIB95 format)
-- Greedy algorithm solver
-- Column generation framework
-- Visualization tools
+このパッケージは配送経路問題を解くためのツールを提供します:
+- VRPファイル解析（TSPLIB95形式）
+- 貪欲アルゴリズムソルバー
+- 列生成フレームワーク
+- 可視化ツール
 
-Main modules:
-- vrp_parser: Parse TSPLIB95 VRP files
-- simple_vrp_solver: Greedy algorithm implementation
-- column_generation: Column generation framework
-- visualizer: Route and problem visualization
+メインモジュール:
+- vrp_parser: TSPLIB95 VRPファイルの解析
+- simple_vrp_solver: 貪欲アルゴリズムの実装
+- column_generation: 列生成フレームワーク
+- visualizer: ルートと問題の可視化
 """
 
 __version__ = "1.0.0"
-__author__ = "VRP Solver Team"
+__author__ = "VRPソルバーチーム"
 
-# Import main classes for easier access
+# メインクラスを簡単にアクセスできるようにインポート
 from .vrp_parser import VRPInstance, Customer, parse_vrp_file
 from .simple_vrp_solver import SimpleVRPSolver
 from .visualizer import VRPVisualizer
