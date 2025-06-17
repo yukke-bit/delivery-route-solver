@@ -65,7 +65,9 @@ def solve_vrp_problem(file_path: str, visualize: bool = True) -> Optional[tuple]
         
         try:
             cg_solver = ColumnGeneration(instance)
-            cg_route_objects, cg_cost = cg_solver.solve(max_iterations=50)
+            # 大規模問題用の設定調整
+            max_iter = 20 if len(instance.customers) > 100 else 50
+            cg_route_objects, cg_cost = cg_solver.solve(max_iterations=max_iter)
             
             # Route オブジェクトから通常のルート形式に変換
             cg_routes = [route.customers for route in cg_route_objects]
@@ -207,8 +209,12 @@ def main():
     print("配送経路問題（VRP）ソルバー")
     print("=" * 50)
     
-    # デフォルトテストファイル
-    test_file = "data/instances/A-n32-k5.vrp"
+    # デフォルトテストファイル（大規模問題に変更）
+    import sys
+    if len(sys.argv) > 1:
+        test_file = sys.argv[1]
+    else:
+        test_file = "data/large_instances/X-n101-k25.vrp"  # 101顧客の大規模問題
     
     # VRP問題を解く
     result = solve_vrp_problem(test_file, visualize=True)
