@@ -4,10 +4,9 @@ VRP解の可視化モジュール
 """
 
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from typing import List, Tuple
-import numpy as np
-from .vrp_parser import VRPInstance, Customer
+from typing import List
+from .vrp_parser import VRPInstance
+from . import config
 
 # フォント設定を明示的に指定してUnicode問題を回避
 plt.rcParams['font.family'] = 'DejaVu Sans'
@@ -25,13 +24,7 @@ class VRPVisualizer:
         self.instance = instance
         self.depot = instance.get_depot()
         self.customers = instance.get_customer_nodes()
-        
-        # 色のパレットを準備（車両別に異なる色を使用）
-        self.colors = [
-            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
-            '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-            '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
-        ]
+        self.colors = config.VISUALIZER_COLORS
     
     def _clean_text(self, text: str) -> str:
         """テキストから問題のある文字を除去してASCII安全にする"""
@@ -53,7 +46,7 @@ class VRPVisualizer:
             save_path: 保存パス（Noneの場合は保存しない）
             show_plot: プロットを表示するかどうか
         """
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=config.FIGURE_SIZE)
         clean_title = self._clean_text(title)
         plt.title(clean_title, fontsize=16, fontweight='bold')
         
@@ -115,7 +108,7 @@ class VRPVisualizer:
         
         # 保存
         if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=config.DPI, bbox_inches='tight')
             print(f"Visualization saved: {save_path}")
         
         # 表示
@@ -203,7 +196,7 @@ class VRPVisualizer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=config.DPI, bbox_inches='tight')
             print(f"Comparison result saved: {save_path}")
         
         plt.show()
@@ -259,7 +252,7 @@ class VRPVisualizer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=config.DPI, bbox_inches='tight')
             print(f"Problem instance saved: {save_path}")
         
         if show_plot:
