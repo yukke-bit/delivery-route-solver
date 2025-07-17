@@ -69,41 +69,66 @@ class ColumnGeneration:
         load = self.calculate_route_load(route_customers)
         return load <= self.instance.capacity
     
-    def generate_initial_routes(self) -> List[Route]:
-        """初期ルート生成（多様なルートパターンを作成）"""
+    def generate_initial_routes(self, max_routes: int = 100) -> List[Route]:
+        """初期ルート生成（効率的で多様なルートパターンを作成）"""
+        from .config import config
+        
+        # 設定から最大ルート数を取得
+        max_routes = config.get('performance', 'max_initial_routes', max_routes)
+        generation_method = config.get('performance', 'route_generation_method', 'nearest_neighbor')
+        
+        print(f"初期ルート生成: 最大{max_routes}ルート, 手法={generation_method}")
+        
         routes = []
         
-        # 1. 各顧客への単独ルート
+        # 1. 各顧客への単独ルート（必須）
         for customer in self.customers:
             if customer.demand <= self.instance.capacity:
                 cost = self.calculate_route_cost([customer.id])
                 load = customer.demand
                 routes.append(Route([customer.id], cost, load))
         
-        # 2. 貪欲法による複数顧客ルート
-        remaining_customers = self.customers.copy()
+        # 2. 効率的な複数顧客ルート生成
+        if generation_method == 'nearest_neighbor':
+            routes.extend(self._generate_nearest_neighbor_routes(max_routes - len(routes)))
+        elif generation_method == 'savings':
+            routes.extend(self._generate_savings_routes(max_routes - len(routes)))
+        else:  # default: nearest_neighbor
+            routes.extend(self._generate_nearest_neighbor_routes(max_routes - len(routes)))
         
-        while remaining_customers:
-            current_route = []
-            current_load = 0
-            current_pos = self.depot
-            
-            # 最も遠い顧客から開始（多様性確保）
-            if remaining_customers:
-                farthest_customer = max(remaining_customers, 
-                    key=lambda c: self.instance.euclidean_distance(self.depot, c))
+        # 3. 重複除去と品質フィルタリング
+        unique_routes = []
+        seen_routes = set()
+        
+        for route in routes:
+            route_key = tuple(sorted(route.customers))
+            if route_key not in seen_routes:
+                seen_routes.add(route_key)
+                unique_routes.append(route)
+        
+        print(f"初期ルート生成完了: {len(unique_routes)}ルート")
+        return unique_routes[:max_routes]
+    
+    def _generate_nearest_neighbor_routes(self, max_routes: int) -> List[Route]:
+        """最近傍法による複数顧客ルート生成"""
+        routes = []
+        
+        # 各顧客を起点とした最近傍ルート
+        for start_customer in self.customers:
+            if len(routes) >= max_routes:
+                break
                 
-                current_route.append(farthest_customer.id)
-                current_load += farthest_customer.demand
-                current_pos = farthest_customer
-                remaining_customers.remove(farthest_customer)
+            current_route = [start_customer.id]
+            current_load = start_customer.demand
+            current_pos = start_customer
+            unvisited = [c for c in self.customers if c.id != start_customer.id]
             
-            # 貪欲にルートを拡張
-            while remaining_customers:
+            # 最近傍法でルートを構築
+            while unvisited and len(current_route) < 8:  # 最大8顧客まで
                 best_next = None
                 best_distance = float('inf')
                 
-                for candidate in remaining_customers:
+                for candidate in unvisited:
                     if current_load + candidate.demand <= self.instance.capacity:
                         distance = self.instance.euclidean_distance(current_pos, candidate)
                         if distance < best_distance:
@@ -116,12 +141,54 @@ class ColumnGeneration:
                 current_route.append(best_next.id)
                 current_load += best_next.demand
                 current_pos = best_next
-                remaining_customers.remove(best_next)
+                unvisited.remove(best_next)
             
-            # ルートが有効な場合は追加
-            if current_route:
+            # ルートが2顧客以上の場合のみ追加
+            if len(current_route) >= 2:
                 cost = self.calculate_route_cost(current_route)
                 routes.append(Route(current_route, cost, current_load))
+        
+        return routes
+    
+    def _generate_savings_routes(self, max_routes: int) -> List[Route]:
+        """節約法による複数顧客ルート生成"""
+        routes = []
+        
+        # 節約値を計算
+        savings = []
+        for i, customer1 in enumerate(self.customers):
+            for j, customer2 in enumerate(self.customers):
+                if i < j:  # 重複を避ける
+                    # 節約値 = d(0,i) + d(0,j) - d(i,j)
+                    depot_to_i = self.instance.euclidean_distance(self.depot, customer1)
+                    depot_to_j = self.instance.euclidean_distance(self.depot, customer2)
+                    i_to_j = self.instance.euclidean_distance(customer1, customer2)
+                    
+                    saving = depot_to_i + depot_to_j - i_to_j
+                    savings.append((saving, customer1, customer2))
+        
+        # 節約値の降順でソート
+        savings.sort(key=lambda x: x[0], reverse=True)
+        
+        # 既存ルートを管理
+        customer_to_route = {}
+        route_id = 0
+        
+        for saving, customer1, customer2 in savings:
+            if len(routes) >= max_routes:
+                break
+                
+            # 両顧客がまだルートに含まれていない場合
+            if customer1.id not in customer_to_route and customer2.id not in customer_to_route:
+                # 新しいルートを作成
+                if customer1.demand + customer2.demand <= self.instance.capacity:
+                    new_route = [customer1.id, customer2.id]
+                    cost = self.calculate_route_cost(new_route)
+                    load = customer1.demand + customer2.demand
+                    routes.append(Route(new_route, cost, load))
+                    customer_to_route[customer1.id] = route_id
+                    customer_to_route[customer2.id] = route_id
+                    route_id += 1
         
         return routes
     

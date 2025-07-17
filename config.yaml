@@ -1,0 +1,42 @@
+# VRPソルバー設定ファイル
+# 基本設定
+general:
+  default_instance: "data/instances/A-n32-k5.vrp"
+  enable_visualization: true
+  output_directory: "results"
+  verbose: true
+
+# アルゴリズム設定
+algorithms:
+  greedy:
+    enabled: true
+    
+  column_generation:
+    enabled: true
+    max_iterations: 50
+    max_iterations_large: 20  # 100顧客以上の場合
+    large_instance_threshold: 100
+    time_limit: 300  # 秒
+    tolerance: 1e-6
+    
+# パフォーマンス設定
+performance:
+  max_initial_routes: 100
+  route_generation_method: "nearest_neighbor"  # "nearest_neighbor", "savings", "random"
+  parallel_processing: false
+  
+# 出力設定
+output:
+  show_route_details: true
+  show_comparison: true
+  show_optimal_gap: true
+  decimal_places: 2
+  
+# 可視化設定
+visualization:
+  figure_size: [12, 8]
+  dpi: 300
+  save_format: "png"
+  show_depot: true
+  show_customer_labels: true
+  route_colors: ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray"]

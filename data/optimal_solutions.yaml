@@ -1,0 +1,169 @@
+# VRPベンチマーク問題の最適解データベース
+# 出典: CVRPLIB - http://vrp.galgarra.net/
+
+# Augerat et al. (1995) set A
+A-n32-k5:
+  optimal_cost: 784
+  optimal_vehicles: 5
+  source: "Augerat et al. (1995)"
+  
+A-n33-k5:
+  optimal_cost: 661
+  optimal_vehicles: 5
+  source: "Augerat et al. (1995)"
+  
+A-n33-k6:
+  optimal_cost: 742
+  optimal_vehicles: 6
+  source: "Augerat et al. (1995)"
+  
+A-n34-k5:
+  optimal_cost: 778
+  optimal_vehicles: 5
+  source: "Augerat et al. (1995)"
+  
+A-n36-k5:
+  optimal_cost: 799
+  optimal_vehicles: 5
+  source: "Augerat et al. (1995)"
+  
+A-n37-k5:
+  optimal_cost: 669
+  optimal_vehicles: 5
+  source: "Augerat et al. (1995)"
+  
+A-n37-k6:
+  optimal_cost: 949
+  optimal_vehicles: 6
+  source: "Augerat et al. (1995)"
+  
+A-n38-k5:
+  optimal_cost: 730
+  optimal_vehicles: 5
+  source: "Augerat et al. (1995)"
+  
+A-n39-k5:
+  optimal_cost: 822
+  optimal_vehicles: 5
+  source: "Augerat et al. (1995)"
+  
+A-n39-k6:
+  optimal_cost: 831
+  optimal_vehicles: 6
+  source: "Augerat et al. (1995)"
+  
+A-n44-k7:
+  optimal_cost: 937
+  optimal_vehicles: 6
+  source: "Augerat et al. (1995)"
+  
+A-n45-k6:
+  optimal_cost: 944
+  optimal_vehicles: 6
+  source: "Augerat et al. (1995)"
+  
+A-n45-k7:
+  optimal_cost: 1146
+  optimal_vehicles: 7
+  source: "Augerat et al. (1995)"
+  
+A-n46-k7:
+  optimal_cost: 914
+  optimal_vehicles: 7
+  source: "Augerat et al. (1995)"
+  
+A-n48-k7:
+  optimal_cost: 1073
+  optimal_vehicles: 7
+  source: "Augerat et al. (1995)"
+  
+A-n53-k7:
+  optimal_cost: 1010
+  optimal_vehicles: 7
+  source: "Augerat et al. (1995)"
+  
+A-n54-k7:
+  optimal_cost: 1167
+  optimal_vehicles: 7
+  source: "Augerat et al. (1995)"
+  
+A-n55-k9:
+  optimal_cost: 1073
+  optimal_vehicles: 9
+  source: "Augerat et al. (1995)"
+  
+A-n60-k9:
+  optimal_cost: 1354
+  optimal_vehicles: 9
+  source: "Augerat et al. (1995)"
+  
+A-n61-k9:
+  optimal_cost: 1034
+  optimal_vehicles: 9
+  source: "Augerat et al. (1995)"
+  
+A-n62-k8:
+  optimal_cost: 1288
+  optimal_vehicles: 8
+  source: "Augerat et al. (1995)"
+  
+A-n63-k9:
+  optimal_cost: 1616
+  optimal_vehicles: 9
+  source: "Augerat et al. (1995)"
+  
+A-n63-k10:
+  optimal_cost: 1314
+  optimal_vehicles: 10
+  source: "Augerat et al. (1995)"
+  
+A-n64-k9:
+  optimal_cost: 1401
+  optimal_vehicles: 9
+  source: "Augerat et al. (1995)"
+  
+A-n65-k9:
+  optimal_cost: 1174
+  optimal_vehicles: 9
+  source: "Augerat et al. (1995)"
+  
+A-n69-k9:
+  optimal_cost: 1159
+  optimal_vehicles: 9
+  source: "Augerat et al. (1995)"
+  
+A-n80-k10:
+  optimal_cost: 1763
+  optimal_vehicles: 10
+  source: "Augerat et al. (1995)"
+
+# Large instances - Uchoa et al. (2017)
+E-n101-k8:
+  optimal_cost: 815
+  optimal_vehicles: 8
+  source: "Uchoa et al. (2017)"
+  
+M-n101-k10:
+  optimal_cost: 820
+  optimal_vehicles: 10
+  source: "Uchoa et al. (2017)"
+  
+M-n151-k12:
+  optimal_cost: 1015
+  optimal_vehicles: 12
+  source: "Uchoa et al. (2017)"
+  
+X-n101-k25:
+  optimal_cost: 27591
+  optimal_vehicles: 25
+  source: "Uchoa et al. (2017)"
+  
+X-n120-k6:
+  optimal_cost: 13332
+  optimal_vehicles: 6
+  source: "Uchoa et al. (2017)"
+  
+X-n143-k7:
+  optimal_cost: 15700
+  optimal_vehicles: 7
+  source: "Uchoa et al. (2017)"
